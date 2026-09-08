@@ -1,0 +1,17 @@
+<html><body style="font-family: Arial, sans-serif; color:#1f2937;">
+<h2>Your request has been {{ decision_label|lower }} - {{ request.title }}</h2>
+<p><strong>Vertical:</strong> {{ vertical_name }} ({{ vertical_head }})</p>
+<p><strong>Decision:</strong> {{ decision_label }}</p>
+<p><strong>Reviewed by:</strong> {{ reviewer_name }}</p>
+{% if request.review_notes %}
+<p><strong>Notes from the team:</strong><br>{{ request.review_notes }}</p>
+{% endif %}
+{% if project_name %}
+<p>It is now on the tracker as <strong>{{ project_name }}</strong>, and you can follow it on the dashboard.</p>
+{% else %}
+<p>You can see this and every other request you have raised under My Requests.</p>
+{% endif %}
+{% if signature %}<p style="margin:20px 0 0; line-height:1.5; white-space:pre-line; color:#374151;">{{ signature }}</p>{% endif %}
+
+<p style="color:#9ca3af; font-size:12px;">Sent automatically by {{ app_name }}.</p>
+</body></html>

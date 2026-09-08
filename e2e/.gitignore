@@ -1,0 +1,6 @@
+uploads/
+ui/node_modules/
+ui/shots/
+ui/results.json
+ui/fixtures/
+__pycache__/

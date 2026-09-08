@@ -1,0 +1,28 @@
+# /etc/systemd/system/aikyam-tracker.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now aikyam-tracker
+[Unit]
+Description=Aikyam AI Team Tracker (FastAPI + built frontend)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aikyam
+Group=aikyam
+WorkingDirectory=/opt/aikyam-tracker/backend
+EnvironmentFile=/opt/aikyam-tracker/backend/.env
+# ONE worker on purpose: the weekly digest scheduler and login lockout
+# counters live in-process. Scale by putting Caddy/nginx in front, not by
+# adding workers.
+ExecStart=/opt/aikyam-tracker/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8002 --workers 1 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=always
+RestartSec=3
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/aikyam-tracker/backend/uploads
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+# /etc/caddy/Caddyfile - automatic HTTPS in front of the backend.
+# Replace the hostname; Caddy fetches and renews the certificate itself.
+tracker.aikyamcap.com {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8002
+    # Large signed BRDs
+    request_body {
+        max_size 50MB
+    }
+    log {
+        output file /var/log/caddy/aikyam-tracker.log
+        format json
+    }
+}

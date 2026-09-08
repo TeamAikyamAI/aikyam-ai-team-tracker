@@ -1,0 +1,32 @@
+# Secrets
+backend/.env
+frontend/.env
+
+# Python
+backend/venv/
+__pycache__/
+*.pyc
+backend/dev.db
+backend/uploads/
+backend/logs/
+backend/backups/
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Scratch
+_to_delete/
+*.tgz
+
+# End-to-end suite artefacts (the suite itself is committed)
+e2e/uploads/
+e2e/ui/node_modules/
+e2e/ui/shots/
+e2e/ui/fixtures/
+e2e/ui/results.json
+e2e/last_run.txt
+
+# Working files that are not the product
+Claude outputs/
+*.zip

@@ -1,0 +1,17 @@
+# Local secrets - never commit
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Local dev database
+dev.db
+
+# Uploaded BRDs
+uploads/
+
+# Service logs / backups
+logs/
+backups/

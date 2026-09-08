@@ -1,0 +1,219 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Palette derived from the Aikyam mark: violet #7936C1, sky #579FCC,
+       navy #133350 / #2E447D, coral #F1888D. Everything below is a tint or
+       shade of those five, so the UI and the logo read as one thing. */
+    --brand-violet: 271 56% 49%;
+    --brand-sky: 203 53% 57%;
+    --brand-navy: 207 62% 19%;
+    --brand-navy-2: 224 46% 34%;
+    --brand-coral: 357 79% 74%;
+
+    --background: 210 33% 98.5%;
+    --foreground: 214 40% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 214 40% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 214 40% 12%;
+
+    --primary: 266 58% 50%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 212 30% 95%;
+    --secondary-foreground: 214 40% 16%;
+
+    --muted: 212 30% 95%;
+    --muted-foreground: 213 14% 44%;
+
+    --accent: 266 60% 96%;
+    --accent-foreground: 266 58% 38%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 60% 34%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 32 92% 48%;
+    --warning-foreground: 26 30% 12%;
+
+    --border: 213 24% 89%;
+    --input: 213 24% 86%;
+    --ring: 266 58% 50%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 207 62% 12%;
+    --sidebar-foreground: 210 30% 88%;
+    --sidebar-primary: 203 60% 68%;
+    --sidebar-primary-foreground: 207 62% 10%;
+    --sidebar-accent: 207 45% 18%;
+    --sidebar-accent-foreground: 210 30% 94%;
+    --sidebar-border: 207 45% 17%;
+    --sidebar-ring: 203 60% 68%;
+
+    --chart-1: 266 58% 50%;
+    --chart-2: 203 53% 50%;
+    --chart-3: 152 60% 34%;
+    --chart-4: 32 92% 48%;
+    --chart-5: 357 70% 62%;
+  }
+
+  .dark {
+    --background: 212 45% 6%;
+    --foreground: 210 28% 92%;
+
+    --card: 211 40% 8.5%;
+    --card-foreground: 210 28% 92%;
+
+    --popover: 211 40% 8%;
+    --popover-foreground: 210 28% 92%;
+
+    --primary: 266 70% 70%;
+    --primary-foreground: 212 45% 8%;
+
+    --secondary: 211 30% 14%;
+    --secondary-foreground: 210 28% 90%;
+
+    --muted: 211 28% 13%;
+    --muted-foreground: 212 14% 64%;
+
+    --accent: 266 34% 18%;
+    --accent-foreground: 266 70% 80%;
+
+    --destructive: 0 70% 58%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 55% 48%;
+    --success-foreground: 212 45% 7%;
+
+    --warning: 36 92% 58%;
+    --warning-foreground: 26 30% 10%;
+
+    --border: 211 26% 16%;
+    --input: 211 26% 19%;
+    --ring: 266 70% 70%;
+
+    --sidebar-background: 212 52% 4.5%;
+    --sidebar-foreground: 210 24% 80%;
+    --sidebar-primary: 203 65% 70%;
+    --sidebar-primary-foreground: 212 45% 7%;
+    --sidebar-accent: 211 36% 11%;
+    --sidebar-accent-foreground: 210 28% 94%;
+    --sidebar-border: 211 36% 12%;
+    --sidebar-ring: 203 65% 70%;
+
+    --chart-1: 266 70% 70%;
+    --chart-2: 203 60% 62%;
+    --chart-3: 152 55% 48%;
+    --chart-4: 36 92% 58%;
+    --chart-5: 357 75% 72%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "cv11", "ss01", "tnum";
+  }
+  /* One visible focus style everywhere, for keyboard users only. */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.22);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* The logo's violet -> sky sweep, used sparingly: brand moments only. */
+  .brand-gradient {
+    background-image: linear-gradient(
+      135deg,
+      hsl(var(--brand-violet)) 0%,
+      hsl(var(--brand-navy-2)) 55%,
+      hsl(var(--brand-sky)) 100%
+    );
+  }
+  .brand-gradient-text {
+    background-image: linear-gradient(120deg, hsl(var(--brand-violet)), hsl(var(--brand-sky)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .brand-glow {
+    box-shadow:
+      0 0 0 1px hsl(var(--primary) / 0.12),
+      0 12px 40px -12px hsl(var(--brand-violet) / 0.45);
+  }
+  .surface-hover {
+    @apply transition-all duration-200;
+  }
+  .surface-hover:hover {
+    @apply -translate-y-0.5 shadow-popover;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .skeleton {
+    @apply relative overflow-hidden bg-muted;
+  }
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--foreground) / 0.06),
+      transparent
+    );
+    animation: shimmer 1.6s infinite;
+    transform: translateX(-100%);
+  }
+  @keyframes shimmer {
+    100% {
+      transform: translateX(100%);
+    }
+  }
+}

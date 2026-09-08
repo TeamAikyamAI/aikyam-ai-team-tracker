@@ -1,0 +1,20 @@
+<html><body style="font-family: Arial, sans-serif; color:#1f2937;">
+<h2 style="margin-bottom:4px;">AI Automation Team - weekly rollup</h2>
+<p style="color:#6b7280; margin-top:0;">{{ week_start }} to {{ week_end }} &middot; compiled by {{ manager_name }}</p>
+{% for person, rows in by_person.items() %}
+  <h3 style="border-bottom:2px solid #e5e7eb; padding-bottom:4px;">{{ person }}</h3>
+  {% for row in rows %}
+    <div style="border:1px solid #e5e7eb; border-radius:8px; padding:12px 16px; margin-bottom:12px;">
+      <h4 style="margin:0 0 4px 0;">{{ row.project_name }} <span style="font-weight:normal; color:#6b7280;">({{ row.vertical_name }} &middot; {{ row.status_name }})</span></h4>
+      {% if row.plan %}<p><strong>Plan:</strong> {{ row.plan }}</p>{% endif %}
+      {% if row.progress %}<p><strong>Progress:</strong> {{ row.progress }}</p>{% endif %}
+      {% if row.problem %}<p><strong>Problem:</strong> {{ row.problem }}</p>{% endif %}
+    </div>
+  {% else %}
+    <p style="color:#6b7280;">No updates logged this week.</p>
+  {% endfor %}
+{% endfor %}
+{% if signature %}<p style="margin:20px 0 0; line-height:1.5; white-space:pre-line; color:#374151;">{{ signature }}</p>{% endif %}
+
+<p style="color:#9ca3af; font-size:12px;">Sent automatically by {{ app_name }}.</p>
+</body></html>

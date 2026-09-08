@@ -1,0 +1,10 @@
+<html><body style="font-family: Arial, sans-serif; color:#1f2937;">
+<h2>New project request - {{ request.title }}</h2>
+<p><strong>Vertical:</strong> {{ vertical_name }} ({{ vertical_head }})</p>
+<p><strong>Requested by:</strong> {{ requestor_name }}</p>
+<p><strong>Description:</strong><br>{{ request.description or "-" }}</p>
+<p>Signed BRD is attached to this request in the tracker - it was compulsory to submit.</p>
+{% if signature %}<p style="margin:20px 0 0; line-height:1.5; white-space:pre-line; color:#374151;">{{ signature }}</p>{% endif %}
+
+<p style="color:#9ca3af; font-size:12px;">Sent automatically by {{ app_name }}.</p>
+</body></html>
