@@ -30,3 +30,9 @@ e2e/last_run.txt
 # Working files that are not the product
 Claude outputs/
 *.zip
+
+# The team's own key register sheet - internal data, imported once, not source.
+Api_Key.xlsx
+
+# Real project data the tool reads - not source, and not for a shared repo.
+backend/data/

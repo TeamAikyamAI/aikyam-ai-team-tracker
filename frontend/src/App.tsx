@@ -21,6 +21,7 @@ import RequestsReviewPage from "@/pages/RequestsReviewPage";
 import ProjectDetailPage from "@/pages/ProjectDetailPage";
 import MyDayPage from "@/pages/MyDayPage";
 import AskTrackerPage from "@/pages/AskTrackerPage";
+import ApiKeysPage from "@/pages/ApiKeysPage";
 import AdminPage from "@/pages/AdminPage";
 import AuditTrailPage from "@/pages/AuditTrailPage";
 import NotFoundPage from "@/pages/NotFoundPage";
@@ -70,6 +71,10 @@ export default function App() {
 
                   <Route element={<FeatureRoute features={["ask"]} />}>
                     <Route path="/ask" element={<AskTrackerPage />} />
+                  </Route>
+
+                  <Route element={<FeatureRoute features={["api_keys"]} />}>
+                    <Route path="/api-keys" element={<ApiKeysPage />} />
                   </Route>
 
                   <Route element={<FeatureRoute features={["admin_panel"]} />}>

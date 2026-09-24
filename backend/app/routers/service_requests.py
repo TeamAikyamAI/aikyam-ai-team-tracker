@@ -20,6 +20,7 @@ from app.schemas.service_request import ServiceRequestOut, ServiceRequestReview
 from app.services.audit import log_action
 from app.services.email import send_email
 from app.services import settings as cfg
+from app.services import recipients as rcp
 from jinja2 import Environment, FileSystemLoader
 
 router = APIRouter(prefix="/requests", tags=["requests"])
@@ -77,6 +78,10 @@ def submit_request(
     vertical_id: int = Form(...),
     title: str = Form(...),
     description: str | None = Form(None),
+    # Anyone else the requestor wants kept in the loop. JSON arrays from the
+    # form; a comma-separated string also works for anyone calling the API.
+    extra_to: str | None = Form(None),
+    extra_cc: str | None = Form(None),
     brd_file: UploadFile = File(...),  # compulsory - request cannot be built without it
     db: Session = Depends(get_db),
     user: User = Depends(require_feature("apply")),
@@ -84,6 +89,14 @@ def submit_request(
     vertical = db.get(Vertical, vertical_id)
     if not vertical:
         raise HTTPException(status_code=404, detail="Vertical not found")
+
+    # Validate the chosen recipients BEFORE writing the file, so a typo does
+    # not leave an orphan upload on disk.
+    try:
+        chosen_to = rcp.clean(db, extra_to, field="To")
+        chosen_cc = rcp.clean(db, extra_cc, field="Cc")
+    except rcp.RecipientError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     if not brd_file.filename:
         raise HTTPException(status_code=400, detail="A signed BRD file is required to submit a request")
@@ -113,6 +126,8 @@ def submit_request(
         description=description,
         brd_file_path=dest_path,
         status="submitted",
+        extra_to=rcp.dump(chosen_to),
+        extra_cc=rcp.dump(chosen_cc),
     )
     db.add(req)
     db.commit()
@@ -151,14 +166,19 @@ def submit_request(
             .all()
             if u.external_manager_email
         ]
-        cc = [vertical.head_email] + [e for e in dict.fromkeys(management_emails) if e != vertical.head_email]
+        # The team and anyone the requestor put on the To line; the vertical
+        # head, management and the requestor's Cc picks on the Cc line. Nobody
+        # appears twice, and the requestor is never Cc'd on their own request.
+        to_line = rcp.merge(ai_team_emails, chosen_to, exclude=[user.email])
+        cc = rcp.merge([vertical.head_email], management_emails, chosen_cc,
+                       exclude=to_line + [user.email])
         html = _env.get_template("request_submitted.html").render(
             request=req, vertical_name=vertical.name, vertical_head=vertical.head_name,
             requestor_name=user.name, app_name=cfg.get(db, "app_name"),
             signature=cfg.get(db, "email_signature"),
         )
-        if ai_team_emails:
-            send_email(db, to=ai_team_emails, subject=f"New project request: {title}",
+        if to_line:
+            send_email(db, to=to_line, subject=f"New project request: {title}",
                        html_body=html, cc=cc, reply_to=user.email, from_display_name=user.name)
     except Exception:
         _log.exception("could not send the submission notification for request %s", req.id)
@@ -249,11 +269,9 @@ def review_request(request_id: int, payload: ServiceRequestReview, db: Session =
                 app_name=cfg.get(db, "app_name"),
                 signature=cfg.get(db, "email_signature"),
             )
-            cc = (
-                [vertical.head_email]
-                if vertical and vertical.head_email and vertical.head_email != requestor.email
-                else []
-            )
+            head = [vertical.head_email] if vertical and vertical.head_email else []
+            cc = rcp.merge(head, rcp.parse(req.extra_cc), rcp.parse(req.extra_to),
+                           exclude=[requestor.email])
             send_email(
                 db,
                 to=[requestor.email],

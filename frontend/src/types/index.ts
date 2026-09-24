@@ -95,6 +95,9 @@ export interface CreateProjectPayload {
 
 export type UpdateProjectPayload = Partial<CreateProjectPayload> & {
   actual_completion_date?: string | null;
+  /** Only read when this edit moves the project into a terminal status: puts
+   *  the whole AI team on the To line of the delivered email. Never stored. */
+  notify_team?: boolean;
 };
 
 export interface ProjectQueueItem {
@@ -271,6 +274,7 @@ export type FeatureKey =
   | "my_day"
   | "team_day"
   | "projects_manage"
+  | "api_keys"
   | "projects_delete"
   | "projects_export"
   | "project_remarks"
@@ -339,4 +343,45 @@ export interface TeamDayView {
 export interface UserBrief {
   id: number;
   name: string;
+}
+
+// --- API key register ------------------------------------------------------
+
+export interface ApiProvider {
+  id: number;
+  name: string;
+  is_active: boolean;
+  sort_order: number;
+}
+
+/** A register entry. There is deliberately no field for the key itself — the
+ *  register records that a key exists and when it lapses, never its value. */
+export interface ApiKeyEntry {
+  id: number;
+  project_id: number | null;
+  project_label: string | null;
+  /** Null only while the key is pending — nobody has settled the vendor yet. */
+  provider_id: number | null;
+  purpose: string | null;
+  expires_on: string | null;
+  account_email: string | null;
+  status: "active" | "pending" | "revoked";
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  project_name: string;
+  provider_name: string;
+  days_left: number | null;
+  expiry_state: "none" | "ok" | "soon" | "expired";
+}
+
+export interface ApiKeyPayload {
+  project_id?: number | null;
+  project_label?: string | null;
+  provider_id: number | null;
+  purpose?: string | null;
+  expires_on?: string | null;
+  account_email?: string | null;
+  status?: string;
+  notes?: string | null;
 }

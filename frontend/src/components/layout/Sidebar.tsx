@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   ChevronsLeft,
   ChevronsRight,
+  KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCan } from "@/hooks/usePermissions";
@@ -37,6 +38,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/my-requests", label: "My Requests", icon: Inbox, features: ["my_requests"] },
   { to: "/requests", label: "Requests Review", icon: FolderKanban, features: ["requests_review"] },
   { to: "/ask", label: "Ask the Tracker", icon: Sparkles, features: ["ask"] },
+  { to: "/api-keys", label: "API Keys", icon: KeyRound, features: ["api_keys"] },
   { to: "/admin", label: "Admin Panel", icon: Users, features: ["admin_panel"] },
   { to: "/audit", label: "Audit Trail", icon: ShieldCheck, features: ["audit_trail"] },
 ];

@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DatePicker } from "@/components/ui/date-picker";
 import { MultiUserSelect } from "@/components/common/MultiUserSelect";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useStatuses } from "@/hooks/useStatuses";
 import { useVerticals } from "@/hooks/useVerticals";
 import { useUsers } from "@/hooks/useUsers";
@@ -43,6 +44,13 @@ export function EditProjectDialog({ project }: { project: Project }) {
   const [actualCompletionDate, setActualCompletionDate] = React.useState<string | null>(
     project.actual_completion_date
   );
+  const [notifyTeam, setNotifyTeam] = React.useState(false);
+
+  // The delivered email only fires on the way INTO a terminal status, so the
+  // tick box only appears on the edit that actually does that.
+  const wasTerminal = Boolean(statuses?.find((s) => s.id === project.status_id)?.is_terminal);
+  const willBeTerminal = Boolean(statuses?.find((s) => s.id === Number(statusId))?.is_terminal);
+  const delivering = willBeTerminal && !wasTerminal;
 
   React.useEffect(() => {
     if (open) {
@@ -56,6 +64,7 @@ export function EditProjectDialog({ project }: { project: Project }) {
       setOwnerIds(project.owner_ids ?? []);
       setTargetDate(project.target_date);
       setActualCompletionDate(project.actual_completion_date);
+      setNotifyTeam(false);
     }
   }, [open, project]);
 
@@ -75,9 +84,15 @@ export function EditProjectDialog({ project }: { project: Project }) {
           remarks: remarks.trim() || null,
           target_date: targetDate,
           actual_completion_date: actualCompletionDate,
+          notify_team: delivering ? notifyTeam : undefined,
         },
       });
-      toast.success("Project updated");
+      toast.success(
+        delivering ? "Marked as delivered" : "Project updated",
+        delivering
+          ? { description: "The person who requested it has been emailed." }
+          : undefined
+      );
       setOpen(false);
     } catch (err) {
       toast.error("Couldn't update project", { description: apiErrorMessage(err) });
@@ -169,6 +184,25 @@ export function EditProjectDialog({ project }: { project: Project }) {
             <Label htmlFor="edit-remarks">Remarks</Label>
             <Textarea id="edit-remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} />
           </div>
+
+          {delivering && (
+            <div className="rounded-lg border border-success/40 bg-success/10 p-3">
+              <p className="text-sm font-medium text-foreground">This marks the project delivered.</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                The person who requested it is emailed, with their vertical head and management copied.
+                Projects the team raised itself have nobody to tell, so nothing is sent for those.
+              </p>
+              <label className="mt-2.5 flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={notifyTeam}
+                  onCheckedChange={(v) => setNotifyTeam(v === true)}
+                  aria-label="Also address the whole AI team"
+                />
+                Also address the whole AI team, not just the requestor
+              </label>
+            </div>
+          )}
+
           <DialogFooter>
             <Button type="submit" disabled={updateProject.isPending || !name.trim()}>
               {updateProject.isPending && <Loader2 className="h-4 w-4 animate-spin" />}

@@ -54,6 +54,7 @@ def outbox():
 def _patch_email(outbox):
     import app.services.email as email_mod
     import app.routers.service_requests as sr
+    import app.routers.projects as projects_router
     import app.routers.settings as settings_router
     import app.services.digest as digest
 
@@ -68,7 +69,7 @@ def _patch_email(outbox):
                        "reply_to": reply_to, "from_name": from_display_name})
         return True
 
-    for mod in (email_mod, sr, settings_router, digest):
+    for mod in (email_mod, sr, projects_router, settings_router, digest):
         if hasattr(mod, "send_email"):
             mod.send_email = fake_send
     email_mod.real_send_email = real_send_email
@@ -115,7 +116,10 @@ def seed():
     member.reports_to_id = admin.id
     vertical = Vertical(name="Operations", head_name="Olivia Head", head_email="olivia@example.com", is_active=True)
     s1 = Status(name="In queue", sort_order=1, is_active=True, color="#94a3b8")
-    s2 = Status(name="Live", sort_order=4, is_active=True, color="#22c55e")
+    # Terminal on purpose: "Live" is what delivered means here, and several
+    # behaviours hang off reaching it - the completion date is stamped and the
+    # requestor is told.
+    s2 = Status(name="Live", sort_order=4, is_active=True, color="#22c55e", is_terminal=True)
     db.add_all([vertical, s1, s2])
     db.commit()
     ids = {

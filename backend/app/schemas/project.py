@@ -27,6 +27,11 @@ class ProjectUpdate(BaseModel):
     target_date: date | None = None
     actual_completion_date: date | None = None
 
+    # Not stored. Only read when this edit moves the project into a terminal
+    # status, and only to decide whether the delivered-email also goes to the
+    # whole AI team rather than just the person who asked for the work.
+    notify_team: bool = False
+
 
 class ProjectOut(BaseModel):
     id: int

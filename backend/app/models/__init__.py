@@ -12,9 +12,11 @@ from app.models.password_reset import PasswordResetToken
 from app.models.role_permission import RolePermission
 from app.models.daily_task import DailyTask
 from app.models.chat_draft import ChatDraft
+from app.models.api_key import ApiProvider, ApiKeyEntry
 
 __all__ = [
     "User", "Vertical", "Status", "Project", "project_owners", "Update",
     "ServiceRequest", "AuditLog", "BrandingAsset", "AppSetting", "ChatMessage",
     "PasswordResetToken", "RolePermission", "DailyTask", "ChatDraft",
+    "ApiProvider", "ApiKeyEntry",
 ]

@@ -59,17 +59,20 @@ def test_team_members_cannot_file_requests_by_default(client, seed, auth):
     assert _submit(client, auth("member"), seed, title="Filed by the team itself").status_code == 403
 
 
-def test_a_team_member_filing_a_request_is_not_mailed_twice(client, seed, auth, outbox, db):
-    """If an admin does turn Apply on for the team, the submitter appears in the
-    To line once, not twice."""
+def test_nobody_is_mailed_about_their_own_submission(client, seed, auth, outbox, db):
+    """If an admin turns Apply on for the team, a member filing a request is not
+    told about it - they just filed it - and appears nowhere twice."""
     from app.services import permissions as perms
     perms.set_many(db, {"apply": {"member": True}})
     try:
         outbox.clear()
         assert _submit(client, auth("member"), seed, title="Filed by the team itself").status_code == 201
-        to = outbox[0]["to"]
-        assert len(to) == len(set(to))
-        assert "member@example.com" in to
+        mail = outbox[0]
+        assert "member@example.com" not in mail["to"]
+        assert "member@example.com" not in mail["cc"]
+        assert mail["reply_to"] == "member@example.com"
+        everyone = mail["to"] + mail["cc"]
+        assert len(everyone) == len(set(everyone))
     finally:
         perms.set_many(db, {"apply": {"member": False}})
 
@@ -186,3 +189,72 @@ def test_a_submission_still_succeeds_when_the_mailbox_is_broken(client, seed, au
     r = _submit(client, auth("req1"), seed, title="Saved even though mail failed")
     assert r.status_code == 201
     assert r.json()["status"] == "submitted"
+
+
+# ---------------------------------------------------------------------------
+# Recipients the requestor chooses on the form
+# ---------------------------------------------------------------------------
+
+def _submit_with(client, headers, seed, *, to=None, cc=None, title="With recipients"):
+    data = {"vertical_id": seed["vertical"], "title": title, "description": "x"}
+    if to is not None:
+        data["extra_to"] = to
+    if cc is not None:
+        data["extra_cc"] = cc
+    return client.post(
+        "/requests", headers=headers, data=data,
+        files={"brd_file": ("brd.pdf", io.BytesIO(b"%PDF-1.4 test"), "application/pdf")},
+    )
+
+
+def test_the_requestor_can_add_people_to_both_lines(client, seed, auth, outbox):
+    """They know their own vertical better than the app does."""
+    outbox.clear()
+    r = _submit_with(client, auth("req1"), seed,
+                     to='["member@example.com"]', cc='["raj@example.com"]')
+    assert r.status_code == 201, r.text
+
+    mail = outbox[0]
+    assert "member@example.com" in mail["to"]
+    assert "raj@example.com" in mail["cc"]
+    assert "admin@example.com" in mail["to"]        # the team is still there
+    assert "olivia@example.com" in mail["cc"]       # so is the vertical head
+
+
+def test_a_stranger_cannot_be_copied_in(client, seed, auth):
+    """Internal project detail does not leave on someone's typo."""
+    r = _submit_with(client, auth("req1"), seed, cc='["someone@gmail.com"]')
+    assert r.status_code == 400
+    assert "someone@gmail.com" in r.json()["detail"]
+
+
+def test_a_colleague_on_the_company_domain_is_allowed_without_an_account(client, seed, auth, outbox, db):
+    """Heads who never log in still need to be copyable."""
+    from app.services import settings as cfg
+    cfg.set_many(db, {"email_domain": "example.com"})
+    outbox.clear()
+    r = _submit_with(client, auth("req1"), seed, cc='["no.login.head@example.com"]',
+                     title="Copy a head with no account")
+    assert r.status_code == 201, r.text
+    assert "no.login.head@example.com" in outbox[0]["cc"]
+
+
+def test_the_list_is_capped(client, seed, auth):
+    many = [f"person{i}@example.com" for i in range(20)]
+    r = _submit_with(client, auth("req1"), seed, cc=str(many).replace("'", '"'))
+    assert r.status_code == 400
+    assert "at most" in r.json()["detail"]
+
+
+def test_the_choice_follows_the_request_to_the_decision_email(client, seed, auth, outbox, db):
+    """One choice at filing time, honoured across all three emails."""
+    from app.services import settings as cfg
+    cfg.set_many(db, {"email_domain": "example.com"})
+    filed = _submit_with(client, auth("req1"), seed, cc='["watcher@example.com"]',
+                         title="Watch this one through").json()
+    outbox.clear()
+
+    client.post(f"/requests/{filed['id']}/review", headers=auth("admin"),
+                json={"decision": "approved", "review_notes": "Yes."})
+    assert "watcher@example.com" in outbox[0]["cc"]
+    assert outbox[0]["to"] == ["rita@example.com"]

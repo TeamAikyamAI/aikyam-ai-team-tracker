@@ -34,4 +34,12 @@ class ServiceRequest(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Extra people the REQUESTOR chose to keep in the loop when they filed
+    # this. Stored as a JSON list of addresses so one choice follows the
+    # request through all three of its emails - submitted, reviewed, delivered
+    # - instead of being retyped at each step. The vertical head and the AI
+    # team are added by the app and are not in here.
+    extra_to: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extra_cc: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -14,6 +14,29 @@
     <p style="color:#6b7280;">No updates logged this week.</p>
   {% endfor %}
 {% endfor %}
+{% if expiring_keys %}
+<h3 style="margin-top:24px;">API keys needing attention</h3>
+<p style="color:#6b7280; margin-top:0;">Expired, or lapsing within the next {{ expiry_window }} days.</p>
+<table cellpadding="6" cellspacing="0" style="border-collapse:collapse; font-size:13px;">
+  <tr style="background:#f3f4f6;">
+    <th align="left">Project</th><th align="left">Provider</th>
+    <th align="left">Expires</th><th align="left">Status</th><th align="left">Account</th>
+  </tr>
+  {% for k in expiring_keys %}
+  <tr style="border-top:1px solid #e5e7eb;">
+    <td>{{ k.project }}</td>
+    <td>{{ k.provider }}</td>
+    <td>{{ k.expires_on }}</td>
+    <td style="color:{% if k.state == 'expired' %}#b91c1c{% else %}#b45309{% endif %};">
+      {% if k.state == 'expired' %}Expired {{ -k.days }} day{{ '' if -k.days == 1 else 's' }} ago
+      {% else %}{{ k.days }} day{{ '' if k.days == 1 else 's' }} left{% endif %}
+    </td>
+    <td>{{ k.account_email }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
 {% if signature %}<p style="margin:20px 0 0; line-height:1.5; white-space:pre-line; color:#374151;">{{ signature }}</p>{% endif %}
 
 <p style="color:#9ca3af; font-size:12px;">Sent automatically by {{ app_name }}.</p>

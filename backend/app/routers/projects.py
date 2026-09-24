@@ -1,3 +1,4 @@
+import logging
 from datetime import date, datetime
 from io import BytesIO
 
@@ -12,15 +13,21 @@ from app.models.user import User
 from app.models.project import Project
 from app.models.status import Status
 from app.models.update import Update
+from app.models.service_request import ServiceRequest
 from app.models.vertical import Vertical
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectOut
 from app.schemas.queue import QueueItem
 from app.services.audit import log_action
+from app.services.email import send_email
+from app.services import recipients as rcp
 from app.services import permissions as perms
 from app.services import settings as cfg
 from app.services.excel import build_projects_workbook
+from jinja2 import Environment, FileSystemLoader
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+_env = Environment(loader=FileSystemLoader("app/templates"))
+_log = logging.getLogger("aikyam.projects")
 
 
 def _visible(db: Session, project: Project, user: User) -> ProjectOut:
@@ -126,12 +133,93 @@ def create_project(payload: ProjectCreate, db: Session = Depends(get_db), user: 
     return _visible(db, project, user)
 
 
+def _announce_delivery(db: Session, project: Project, actor: User, notify_team: bool) -> None:
+    """Tell the person who asked for this that it is done.
+
+    Only projects that came from a service request have someone to tell - a
+    project the team raised itself has no requestor, so nothing is sent.
+
+    To: the requestor, plus the whole AI team when the person completing it
+    ticked that box. Cc: the vertical head, management, and whoever the
+    requestor chose to keep in the loop when they filed.
+
+    Everything here runs after the status change is committed, so no failure in
+    it may escape - a delivered project must not become a 500.
+    """
+    try:
+        if not project.source_request_id:
+            return
+        req = db.get(ServiceRequest, project.source_request_id)
+        if not req:
+            return
+        requestor = db.get(User, req.requestor_id)
+        if not requestor or not requestor.email:
+            return
+
+        vertical = db.get(Vertical, project.vertical_id)
+        status = db.get(Status, project.status_id)
+        team = [
+            u.email
+            for u in db.query(User)
+            .filter(User.role.in_(["admin", "member"]), User.is_active == True)  # noqa: E712
+            .order_by(User.name)
+            .all()
+        ]
+        management = [
+            u.external_manager_email
+            for u in db.query(User)
+            .filter(
+                User.role.in_(["admin", "member"]),
+                User.is_active == True,  # noqa: E712
+                User.reports_to_id.is_(None),
+                User.external_manager_email.isnot(None),
+            )
+            .all()
+            if u.external_manager_email
+        ]
+
+        to_line = rcp.merge([requestor.email], rcp.parse(req.extra_to),
+                            team if notify_team else [])
+        cc = rcp.merge(
+            [vertical.head_email] if vertical and vertical.head_email else [],
+            management,
+            rcp.parse(req.extra_cc),
+            exclude=to_line,
+        )
+
+        html = _env.get_template("project_completed.html").render(
+            project=project,
+            status_name=status.name if status else "-",
+            vertical_name=vertical.name if vertical else "-",
+            vertical_head=vertical.head_name if vertical else "-",
+            owners=", ".join(o.name for o in project.owners),
+            from_request=True,
+            request_date=req.created_at.date() if req.created_at else "",
+            app_name=cfg.get(db, "app_name"),
+            signature=cfg.get(db, "email_signature"),
+        )
+        send_email(
+            db,
+            to=to_line,
+            subject=f"Delivered: {project.name}",
+            html_body=html,
+            cc=cc,
+            reply_to=actor.email,
+            from_display_name=actor.name,
+        )
+        log_action(db, actor.id, "project_delivered_email", "project", project.id,
+                   details=", ".join(to_line))
+    except Exception:
+        _log.exception("could not send the delivery notification for project %s", project.id)
+
+
 @router.patch("/{project_id}", response_model=ProjectOut)
 def update_project(project_id: int, payload: ProjectUpdate, db: Session = Depends(get_db), user: User = Depends(require_feature("projects_manage"))):
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    data = payload.model_dump(exclude_unset=True, exclude={"owner_ids"})
+    data = payload.model_dump(exclude_unset=True, exclude={"owner_ids", "notify_team"})
+    was_terminal = bool(project.status and project.status.is_terminal)
     if "name" in data:
         data["name"] = data["name"].strip()
         if _name_taken(db, data["name"], exclude_id=project.id):
@@ -152,6 +240,14 @@ def update_project(project_id: int, payload: ProjectUpdate, db: Session = Depend
     db.commit()
     db.refresh(project)
     log_action(db, user.id, "update_project", "project", project.id)
+
+    # Reaching a terminal status is what "delivered" means here - the same
+    # moment that stamps the completion date. Only on the way IN, so editing a
+    # project that is already Live never mails anyone a second time.
+    now_terminal = bool(project.status and project.status.is_terminal)
+    if now_terminal and not was_terminal:
+        _announce_delivery(db, project, user, payload.notify_team)
+
     return _visible(db, project, user)
 
 

@@ -14,11 +14,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { useVerticals } from "@/hooks/useVerticals";
 import { useCreateRequest } from "@/hooks/useRequests";
+import { useUserDirectory } from "@/hooks/useUsers";
+import { usePublicSettings } from "@/hooks/useSettings";
+import { useAuth } from "@/context/AuthContext";
+import {
+  RecipientPicker,
+  emptyRecipients,
+  toFormValue,
+  type RecipientValue,
+} from "@/components/requests/RecipientPicker";
 import { apiErrorMessage } from "@/lib/api";
 
 export default function ApplyForServicePage() {
   const navigate = useNavigate();
   const { data: verticals, isLoading: verticalsLoading } = useVerticals();
+  const { data: directory } = useUserDirectory();
+  const { settings } = usePublicSettings();
+  const { user } = useAuth();
   const createRequest = useCreateRequest();
 
   const [verticalId, setVerticalId] = React.useState<string>("");
@@ -27,6 +39,8 @@ export default function ApplyForServicePage() {
   const [file, setFile] = React.useState<File | null>(null);
   const [fileTouched, setFileTouched] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
+  const [extraTo, setExtraTo] = React.useState<RecipientValue>(emptyRecipients);
+  const [extraCc, setExtraCc] = React.useState<RecipientValue>(emptyRecipients);
 
   const canSubmit = Boolean(verticalId) && title.trim().length > 0 && Boolean(file);
 
@@ -43,6 +57,10 @@ export default function ApplyForServicePage() {
     form.append("vertical_id", verticalId);
     form.append("title", title.trim());
     if (description.trim()) form.append("description", description.trim());
+    const to = toFormValue(extraTo);
+    const cc = toFormValue(extraCc);
+    if (to) form.append("extra_to", to);
+    if (cc) form.append("extra_cc", cc);
     form.append("brd_file", file);
 
     try {
@@ -153,6 +171,41 @@ export default function ApplyForServicePage() {
                 onChange={(e) => setDescription(e.target.value)}
                 rows={5}
               />
+            </div>
+
+            <div className="space-y-4 rounded-lg border border-border bg-muted/30 p-4">
+              <div>
+                <p className="text-sm font-medium text-foreground">Who else should be kept in the loop?</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Optional. The AI team and your vertical head are always included — this is for anyone
+                  else on your side. Whoever you pick stays on every email about this request: when it
+                  is submitted, when it is decided, and when it is delivered.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Also address to</Label>
+                <RecipientPicker
+                  users={directory ?? []}
+                  value={extraTo}
+                  onChange={setExtraTo}
+                  domain={settings.email_domain}
+                  label="the To line"
+                  excludeUserId={user?.id}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Copy in</Label>
+                <RecipientPicker
+                  users={directory ?? []}
+                  value={extraCc}
+                  onChange={setExtraCc}
+                  domain={settings.email_domain}
+                  label="the Cc line"
+                  excludeUserId={user?.id}
+                />
+              </div>
             </div>
 
             <div className="space-y-1.5">

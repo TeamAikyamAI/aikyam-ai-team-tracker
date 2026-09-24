@@ -18,6 +18,8 @@ from app.models.vertical import Vertical
 from app.models.status import Status
 from app.services.email import send_email
 from app.services import settings as cfg
+from app.services import api_keys as keys
+from app.services import daily
 
 _env = Environment(loader=FileSystemLoader("app/templates"))
 
@@ -117,6 +119,11 @@ def send_weekly_digests(db: Session, preview_to: str | None = None) -> int:
         )
 
     # 2) manager rollup -> their own manager / external_manager_email
+    #
+    # The rollup is also where API keys about to lapse are raised: it is the
+    # one message that reaches the person who can get a renewal approved, and a
+    # key that dies quietly takes a running automation down with it.
+    expiring = keys.digest_lines(db, daily.today_for(db))
     rollup_tpl = _env.get_template("team_rollup.html")
     managers = [p for p in people if p.direct_reports]
     for manager in managers:
@@ -128,7 +135,9 @@ def send_weekly_digests(db: Session, preview_to: str | None = None) -> int:
         recipient = manager.reports_to.email if manager.reports_to else manager.external_manager_email
         if not recipient:
             continue
-        html = rollup_tpl.render(manager_name=manager.name, week_start=start.date(), week_end=end.date(), by_person=by_person, app_name=app_name, signature=signature)
+        html = rollup_tpl.render(manager_name=manager.name, week_start=start.date(), week_end=end.date(),
+                                 by_person=by_person, app_name=app_name, signature=signature,
+                                 expiring_keys=expiring, expiry_window=keys.EXPIRY_WINDOW_DAYS)
         deliver(
             [recipient],
             f"{app_name} - weekly rollup - {start.date()} to {end.date()}",

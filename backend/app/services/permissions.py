@@ -78,6 +78,12 @@ REGISTRY: tuple[Feature, ...] = (
         frozenset({"admin", "member"}),
         "The assistant page and the chat widget.",
     ),
+    Feature(
+        "api_keys", "API Key Register", "Screens",
+        frozenset({"admin", "member"}),
+        "Which provider's key each project uses, what for and when it lapses. "
+        "The AI team's own record - requestors have no reason to see it.",
+    ),
 
     # --- My Day -------------------------------------------------------------
     Feature(

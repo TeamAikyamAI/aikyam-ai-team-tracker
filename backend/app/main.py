@@ -24,7 +24,7 @@ from app.services.scheduler import next_run_time, scheduler_running, start_sched
 
 from app.routers import (
     auth, users, verticals, statuses, projects, updates, service_requests, ai, audit,
-    branding, chatbot, daily, permissions, settings as settings_router,
+    branding, chatbot, daily, permissions, api_keys, settings as settings_router,
 )
 
 configure_logging()
@@ -67,8 +67,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 api = APIRouter(prefix="/api")
 for r in (auth, users, verticals, statuses, projects, updates, service_requests, ai, audit,
-          branding, settings_router, chatbot, daily, permissions):
+          branding, settings_router, chatbot, daily, permissions, api_keys):
     api.include_router(r.router)
+api.include_router(api_keys.providers_router)
 
 
 @api.get("/health", tags=["health"])

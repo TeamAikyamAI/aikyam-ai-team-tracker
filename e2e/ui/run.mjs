@@ -161,10 +161,13 @@ async function blockMember() {
   console.log("\nBlock B - team member");
   const { context, page } = await signIn("member");
 
-  await test("UI-B1", "sidebar shows the seven delivery screens", async () => {
+  await test("UI-B1", "sidebar shows the six delivery screens", async () => {
+    // No Apply for Service and no My Requests: the team receives requests,
+    // it does not file them against itself. The API key register is the team's
+    // own infrastructure, so it does belong here.
     eq(await navLabels(page), [
-      "Dashboard", "My Day", "Project Queue", "Apply for Service",
-      "My Requests", "Requests Review", "Ask the Tracker",
+      "Dashboard", "My Day", "Project Queue", "Requests Review", "Ask the Tracker",
+      "API Keys",
     ], "member sidebar");
   });
 
@@ -223,8 +226,48 @@ async function blockMember() {
     eq(head, "PK", "the export is not a real xlsx");
   });
 
-  await test("UI-B6", "administration is not reachable", async () => {
-    for (const route of ["/admin", "/audit"]) await expectBounced(page, route);
+  await test("UI-B6", "a team member has no Delete on a project", async () => {
+    // Editing is everyday work; deleting is admin-only, so the button must not
+    // even render for a member.
+    await page.goto(`${BASE}/`);
+    await page.getByText("Compliance Tracker").first().waitFor({ timeout: 20000 });
+    await page.getByText("Compliance Tracker").first().click();
+    await page.waitForTimeout(2000);
+    const buttons = (await page.locator("main button").allInnerTexts()).map((t) => t.trim());
+    ok(buttons.some((b) => b.includes("Edit")), "a member cannot edit a project");
+    ok(!buttons.some((b) => b.includes("Delete")), "Delete is offered to a team member");
+  });
+
+  await test("UI-B7", "administration is not reachable", async () => {
+    for (const route of ["/admin", "/audit", "/apply", "/my-requests"]) await expectBounced(page, route);
+  });
+
+  await test("UI-B8", "a member records a key in the register, without the key", async () => {
+    await page.goto(`${BASE}/api-keys`);
+    await page.getByRole("heading", { name: "API Key Register" }).waitFor({ timeout: 20000 });
+
+    // The one thing the page must never offer: somewhere to paste the secret.
+    const body = (await page.locator("main").innerText()).toLowerCase();
+    ok(body.includes("register, not a vault"), "the page does not say what it is not");
+
+    await page.getByRole("button", { name: "Add key" }).click();
+    await page.getByRole("dialog").waitFor({ timeout: 10000 });
+    const fields = await page.locator('[role="dialog"] input, [role="dialog"] textarea').count();
+    const labels = (await page.locator('[role="dialog"] label').allInnerTexts())
+      .map((t) => t.trim().toLowerCase());
+    ok(!labels.some((l) => l.includes("key value") || l === "api key" || l.includes("secret")),
+       "the dialog offers a field for the key itself");
+    ok(fields > 0, "the dialog rendered no fields at all");
+
+    await page.getByLabel("Name of the work this key belongs to").fill("UI Meeting Hub");
+    // Provider is a curated list, so pick from it rather than typing.
+    await page.locator('[role="dialog"] button[role="combobox"]').nth(1).click();
+    await page.locator('[role="option"]').first().click();
+    await page.locator("#key-purpose").fill("For the STT");
+    await page.getByRole("button", { name: "Add to register" }).click();
+
+    await page.getByText("UI Meeting Hub").first().waitFor({ timeout: 15000 });
+    await page.screenshot({ path: path.join(SHOTS, "member-api-keys.png") });
   });
 
   await context.close();
@@ -234,10 +277,10 @@ async function blockAdmin() {
   console.log("\nBlock C - admin");
   const { context, page } = await signIn("admin");
 
-  await test("UI-C1", "sidebar shows all nine screens", async () => {
+  await test("UI-C1", "sidebar shows all ten screens", async () => {
     eq(await navLabels(page), [
       "Dashboard", "My Day", "Project Queue", "Apply for Service", "My Requests",
-      "Requests Review", "Ask the Tracker", "Admin Panel", "Audit Trail",
+      "Requests Review", "Ask the Tracker", "API Keys", "Admin Panel", "Audit Trail",
     ], "admin sidebar");
     await page.screenshot({ path: path.join(SHOTS, "admin-dashboard.png") });
   });
@@ -299,7 +342,38 @@ async function blockAdmin() {
     ok(body.includes("UI Suite Chat Project"), "the chat-created project is not on the board");
   });
 
-  await test("UI-C5", "the permission grid refuses to lock the admin out", async () => {
+  await test("UI-C5", "an admin can delete a project, with a confirmation first", async () => {
+    // Create one through the dialog so the run never deletes seeded data.
+    await page.goto(`${BASE}/`);
+    await page.click('button:has-text("New Project")');
+    await page.waitForSelector("#proj-name");
+    await page.fill("#proj-name", "UI Suite Doomed Project");
+    await pickFromSelect(page, page.locator('[role="dialog"] button').filter({ hasText: "Select" }).first(), "Accounts");
+    await pickFromSelect(page, page.locator('[role="dialog"] button').filter({ hasText: "Select" }).first(), "WIP");
+    await page.locator('[role="dialog"] button[type="submit"]').click();
+    await page.waitForTimeout(2500);
+
+    await page.getByText("UI Suite Doomed Project").first().click();
+    await page.waitForTimeout(2000);
+    await page.locator('main button:has-text("Delete")').first().click();
+    await page.waitForTimeout(800);
+
+    // Nothing goes without an explicit confirmation.
+    const dialog = page.locator('[role="alertdialog"]');
+    ok(await dialog.count() > 0, "Delete went straight through with no confirmation");
+    ok((await dialog.innerText()).includes("UI Suite Doomed Project"),
+      "the confirmation does not name the project being deleted");
+    await dialog.locator('button:has-text("Delete project")').click();
+    await page.waitForTimeout(2500);
+
+    await page.goto(`${BASE}/`);
+    await page.waitForSelector("main");
+    await page.waitForTimeout(2000);
+    ok(!(await page.locator("main").innerText()).includes("UI Suite Doomed Project"),
+      "the deleted project is still on the board");
+  });
+
+  await test("UI-C6", "the permission grid refuses to lock the admin out", async () => {
     await page.goto(`${BASE}/admin`);
     await page.getByRole("tab", { name: "Access" }).click();
     await page.waitForTimeout(1500);
@@ -317,6 +391,14 @@ async function blockGridLive() {
   console.log("\nBlock D - a permission change, seen from the other side");
   const admin = await signIn("admin");
   const before = await signIn("requestor");
+
+  await test("UI-C7", "the register is closed to a requestor", async () => {
+    const { context: rc, page: rp } = await signIn("requestor");
+    const labels = await navLabels(rp);
+    ok(!labels.includes("API Keys"), "a requestor is offered the API key register");
+    await expectBounced(rp, "/api-keys");
+    await rc.close();
+  });
 
   await test("UI-D1", "a requestor starts with the dashboard", async () => {
     ok((await navLabels(before.page)).includes("Dashboard"), "the requestor has no dashboard to remove");
@@ -352,6 +434,41 @@ async function blockGridLive() {
     const after = await signIn("requestor");
     ok((await navLabels(after.page)).includes("Dashboard"), "Dashboard did not come back");
     await after.context.close();
+  });
+
+  await test("UI-D4", "the Apply for Service routes follow the permission both ways", async () => {
+    // Off by default for the team. The Project Queue page also carries two
+    // buttons into it - they have to appear and disappear with the tick, or
+    // the person lands on a route that bounces them straight back.
+    const before = await signIn("member");
+    await before.page.goto(`${BASE}/queue`);
+    await before.page.waitForSelector("main");
+    await before.page.waitForTimeout(1500);
+    ok(!(await before.page.locator("main").innerText()).includes("Apply for Service"),
+      "the Project Queue offers Apply for Service to a role that cannot use it");
+    await before.context.close();
+
+    const row = admin.page.locator("tr", { hasText: "Apply for Service" }).first();
+    const cell = row.locator('[role="checkbox"], input[type="checkbox"]').nth(1); // member column
+    const save = admin.page.locator('button:has-text("Save")').first();
+
+    await cell.click();
+    await admin.page.waitForTimeout(600);
+    if (await save.count()) { await save.click(); await admin.page.waitForTimeout(1500); }
+
+    const granted = await signIn("member");
+    ok((await navLabels(granted.page)).includes("Apply for Service"),
+      "granting Apply for Service did not put it in the sidebar");
+    await granted.context.close();
+
+    await cell.click();
+    await admin.page.waitForTimeout(600);
+    if (await save.count()) { await save.click(); await admin.page.waitForTimeout(1500); }
+    const revoked = await signIn("member");
+    const labels = await navLabels(revoked.page);
+    ok(!labels.includes("Apply for Service"),
+      `Apply for Service still in the member sidebar: ${JSON.stringify(labels)}`);
+    await revoked.context.close();
   });
 
   await admin.context.close();

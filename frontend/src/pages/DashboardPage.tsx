@@ -9,7 +9,9 @@ import {
   Rocket,
   Table as TableIcon,
   TimerReset,
+  TriangleAlert,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatCard } from "@/components/common/StatCard";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -22,6 +24,7 @@ import { useStatuses } from "@/hooks/useStatuses";
 import { useVerticals } from "@/hooks/useVerticals";
 import { useUserDirectory } from "@/hooks/useUsers";
 import { useRequests } from "@/hooks/useRequests";
+import { useExpiringApiKeys } from "@/hooks/useApiKeys";
 import { KanbanBoard } from "@/components/dashboard/KanbanBoard";
 import { ProjectTable } from "@/components/dashboard/ProjectTable";
 import { TrendChart } from "@/components/dashboard/TrendChart";
@@ -40,6 +43,9 @@ export default function DashboardPage() {
   const { data: verticals } = useVerticals();
   const { data: users } = useUserDirectory();
   const { data: requests } = useRequests();
+  // The register is the AI team's; a requestor never asks for it.
+  const canSeeKeys = can("api_keys");
+  const { data: expiringKeys } = useExpiringApiKeys(canSeeKeys);
 
   const [view, setView] = usePersistedState<"kanban" | "table">("aikyam-dashboard-view", "kanban");
   const [verticalFilter, setVerticalFilter] = usePersistedState("aikyam-dashboard-vertical", ALL);
@@ -137,6 +143,20 @@ export default function DashboardPage() {
           </div>
         }
       />
+
+      {canSeeKeys && expiringKeys && expiringKeys.length > 0 && (
+        <Link
+          to="/api-keys"
+          className="mb-4 flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm transition-colors hover:border-warning"
+        >
+          <TriangleAlert className="h-4 w-4 shrink-0 text-warning" />
+          <span>
+            <strong>{expiringKeys.length}</strong> API key{expiringKeys.length === 1 ? "" : "s"}{" "}
+            expired or expiring within 30 days
+          </span>
+          <span className="ml-auto text-xs text-muted-foreground">Open the register</span>
+        </Link>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Total projects" value={kpis.total} icon={<FolderKanban className="h-5 w-5" />} loading={loading} accent="primary" index={0} />

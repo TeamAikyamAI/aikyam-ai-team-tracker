@@ -40,15 +40,21 @@ def test_new_fields_round_trip_and_owner_ids_returned(client, seed, auth):
 
 
 def test_moving_to_terminal_status_stamps_completion(client, seed, auth):
+    """Whether a status counts as done is a property of the status, not a
+    hardcoded name - so the same move stamps or does not stamp depending on it."""
     body = {"name": "Goes live", "vertical_id": seed["vertical"], "status_id": seed["status_queue"]}
     pid = client.post("/projects", headers=auth("admin"), json=body).json()["id"]
     r = client.patch(f"/projects/{pid}", headers=auth("admin"), json={"status_id": seed["status_live"]})
-    assert r.json()["actual_completion_date"] is None  # "Live" seed status is not terminal in tests
-    client.patch(f"/statuses/{seed['status_live']}", headers=auth("admin"), json={"is_terminal": True})
-    pid2 = client.post("/projects", headers=auth("admin"), json={**body, "name": "Goes live 2"}).json()["id"]
-    r = client.patch(f"/projects/{pid2}", headers=auth("admin"), json={"status_id": seed["status_live"]})
     assert r.json()["actual_completion_date"] is not None
+
+    # Turn the flag off and the same move stops meaning "finished".
     client.patch(f"/statuses/{seed['status_live']}", headers=auth("admin"), json={"is_terminal": False})
+    try:
+        pid2 = client.post("/projects", headers=auth("admin"), json={**body, "name": "Goes live 2"}).json()["id"]
+        r = client.patch(f"/projects/{pid2}", headers=auth("admin"), json={"status_id": seed["status_live"]})
+        assert r.json()["actual_completion_date"] is None
+    finally:
+        client.patch(f"/statuses/{seed['status_live']}", headers=auth("admin"), json={"is_terminal": True})
 
 
 def test_export_has_one_sheet_per_active_status(client, seed, auth):

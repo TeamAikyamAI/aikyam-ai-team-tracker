@@ -205,9 +205,13 @@ def test_b1_member_feature_set(member):
     """B1: everything to run the work, nothing that administers the app."""
     features = set(member.get("/api/permissions/me").json()["features"])
     assert features == {
-        "dashboard", "queue", "apply", "my_requests", "requests_review", "ask",
+        "dashboard", "queue", "requests_review", "ask", "api_keys",
         "my_day", "projects_manage", "projects_export", "project_remarks",
     }
+    # Editing is everyday work for the team; deleting is not.
+    assert "projects_delete" not in features
+    # The team receives requests, it does not file them against itself.
+    assert "apply" not in features and "my_requests" not in features
 
 
 def test_b2_my_day_accepts_and_ticks_tasks(member):
@@ -372,10 +376,12 @@ def test_b15_assistant_refuses_to_change_anything(member):
 # ===========================================================================
 
 def test_c1_admin_has_every_feature(admin):
-    """C1: all thirteen, including the two the grid cannot take away."""
+    """C1: every feature in the registry, including the ones only an admin gets
+    and the one the grid cannot take away."""
     features = set(admin.get("/api/permissions/me").json()["features"])
-    assert {"admin_panel", "audit_trail", "team_day"} <= features
-    assert len(features) == 13
+    assert {"admin_panel", "audit_trail", "team_day", "projects_delete"} <= features
+    everything = {f["key"] for f in admin.get("/api/permissions").json()["features"]}
+    assert features == everything
 
 
 def test_c2_admin_can_read_the_whole_team_day(admin, member):
@@ -763,3 +769,220 @@ def test_e9_the_spa_fallback_cannot_be_used_to_read_files(anon):
         assert r.status_code in (200, 404), path
         if r.status_code == 200:
             assert "DATABASE_URL" not in r.text and "root:" not in r.text
+
+
+def test_d8_deleting_a_project_is_admin_only_and_grid_controlled(admin, member, grid):
+    """A member cannot delete; an admin can; and the grid can hand it over."""
+    verticals = admin.get("/api/verticals").json()
+    statuses = admin.get("/api/statuses").json()
+
+    def make(name):
+        r = admin.post("/api/projects", json={
+            "name": name, "vertical_id": verticals[0]["id"], "status_id": statuses[0]["id"],
+        })
+        assert r.status_code == 201, r.text
+        return r.json()["id"]
+
+    pid = make("E2E Project To Delete")
+    assert member.delete(f"/api/projects/{pid}").status_code == 403
+    assert admin.get(f"/api/projects/{pid}").status_code == 200
+    assert admin.delete(f"/api/projects/{pid}").status_code == 204
+    assert admin.get(f"/api/projects/{pid}").status_code == 404
+
+    grid("projects_delete", "member", True)
+    pid2 = make("E2E Project A Member May Delete")
+    assert Api("pranjal").delete(f"/api/projects/{pid2}").status_code == 204
+
+
+# ===========================================================================
+# Block F - recipients the requestor chooses, and the delivered email
+# ===========================================================================
+
+def test_f1_the_requestor_can_choose_who_else_is_copied(requestor, admin, member):  # noqa: D401
+    """They know their own vertical better than the app does. Ids for people
+    with an account, addresses for heads who never log in."""
+    admin.patch("/api/settings", json={"values": {"email_domain": "aikyame2e.com"}})
+    r = requestor.post(
+        "/api/requests",
+        data={
+            "vertical_id": 1,
+            "title": "E2E request with chosen recipients",
+            "description": "x",
+            "extra_to": f'[{member.id}]',
+            "extra_cc": '["no.login.head@aikyame2e.com"]',
+        },
+        files=brd(),
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["status"] == "submitted"
+
+
+def test_f2_an_outside_address_is_refused_by_name(requestor):
+    """Internal project detail does not leave on a typo."""
+    r = requestor.post(
+        "/api/requests",
+        data={"vertical_id": 1, "title": "E2E outside address", "description": "x",
+              "extra_cc": '["someone@gmail.com"]'},
+        files=brd(),
+    )
+    assert r.status_code == 400
+    assert "someone@gmail.com" in r.json()["detail"]
+
+
+def test_f3_the_recipient_list_is_capped(requestor):
+    many = ",".join(f"person{i}@aikyame2e.com" for i in range(20))
+    r = requestor.post(
+        "/api/requests",
+        data={"vertical_id": 1, "title": "E2E too many recipients", "description": "x",
+              "extra_cc": many},
+        files=brd(),
+    )
+    assert r.status_code == 400
+    assert "at most" in r.json()["detail"]
+
+
+def test_f4_reaching_a_terminal_status_is_what_delivered_means(admin, requestor):
+    """The delivered email fires on the way in to a terminal status, once."""
+    filed = requestor.post(
+        "/api/requests",
+        data={"vertical_id": 1, "title": "E2E delivered end to end", "description": "x"},
+        files=brd(),
+    ).json()
+    statuses = admin.get("/api/statuses").json()
+    queue = statuses[0]["id"]
+    terminal = next(s["id"] for s in statuses if s["is_terminal"])
+
+    admin.post(f"/api/requests/{filed['id']}/review",
+               json={"decision": "approved", "status_id": queue})
+    project = next(p for p in admin.get("/api/projects").json()
+                   if p["source_request_id"] == filed["id"])
+
+    moved = admin.patch(f"/api/projects/{project['id']}",
+                        json={"status_id": terminal, "notify_team": True})
+    assert moved.status_code == 200
+    # Reaching it stamps the completion date - the same moment the mail goes.
+    assert moved.json()["actual_completion_date"] is not None
+
+    actions = [r for r in admin.get("/api/audit-logs?limit=500").json()
+               if r["action"] == "project_delivered_email"]
+    assert actions, "no delivery notification was attempted"
+    assert "ravi@aikyame2e.com" in actions[0]["details"]
+
+
+# ---------------------------------------------------------------------------
+# G. The API key register
+# ---------------------------------------------------------------------------
+
+def _provider(admin):
+    rows = admin.get("/api/api-providers").json()
+    return rows[0]["id"]
+
+
+def test_g1_the_register_belongs_to_the_ai_team(admin, member, requestor):
+    """Admin and member work in it; a requestor has no door to it at all."""
+    assert admin.get("/api/api-keys").status_code == 200
+    assert member.get("/api/api-keys").status_code == 200
+    assert requestor.get("/api/api-keys").status_code == 403
+    assert requestor.get("/api/api-providers").status_code == 403
+    assert requestor.get("/api/api-keys/export.xlsx").status_code == 403
+    assert requestor.post("/api/api-keys", json={
+        "provider_id": 1, "project_label": "Sneaky", "status": "active",
+    }).status_code == 403
+
+
+def test_g2_a_member_can_add_and_amend_an_entry(admin, member):
+    made = member.post("/api/api-keys", json={
+        "provider_id": _provider(admin),
+        "project_label": "E2E Bulk email",
+        "purpose": "For bulk emailing",
+        "account_email": "aiteam@aikyame2e.com",
+        "expires_on": str(date.today() + timedelta(days=9)),
+        "status": "active",
+    })
+    assert made.status_code == 201, made.text
+    body = made.json()
+    assert body["project_name"] == "E2E Bulk email"
+    assert body["expiry_state"] == "soon" and body["days_left"] == 9
+
+    edited = member.patch(f"/api/api-keys/{body['id']}", json={"purpose": "For the STT"})
+    assert edited.status_code == 200
+    assert edited.json()["purpose"] == "For the STT"
+
+
+def test_g3_the_secret_itself_has_nowhere_to_go(admin):
+    """A register, not a vault — a value sent anyway is dropped, not stored."""
+    r = admin.post("/api/api-keys", json={
+        "provider_id": _provider(admin),
+        "project_label": "E2E No secrets here",
+        "status": "active",
+        "key_value": "sk-live-must-not-persist",
+        "api_key": "sk-live-must-not-persist",
+    })
+    assert r.status_code == 201
+    assert "sk-live" not in str(r.json())
+    listed = admin.get("/api/api-keys").json()
+    assert "sk-live" not in str(listed)
+
+
+def test_g4_expiry_is_derived_and_revoking_ends_the_chasing(admin):
+    lapsed = admin.post("/api/api-keys", json={
+        "provider_id": _provider(admin),
+        "project_label": "E2E Lapsed key",
+        "expires_on": str(date.today() - timedelta(days=4)),
+        "status": "active",
+    }).json()
+    assert lapsed["expiry_state"] == "expired" and lapsed["days_left"] == -4
+
+    ids = [r["id"] for r in admin.get("/api/api-keys/expiring").json()]
+    assert lapsed["id"] in ids
+
+    admin.patch(f"/api/api-keys/{lapsed['id']}", json={"status": "revoked"})
+    ids = [r["id"] for r in admin.get("/api/api-keys/expiring").json()]
+    assert lapsed["id"] not in ids, "a revoked key should stop nagging"
+
+
+def test_g5_the_export_carries_the_teams_own_columns(member, admin):
+    import io
+    from openpyxl import load_workbook
+
+    member.post("/api/api-keys", json={
+        "provider_id": _provider(admin),
+        "project_label": "E2E FD_Rate",
+        "purpose": "For the Scrapping",
+        "account_email": "fd_treasury@aikyame2e.com",
+        "status": "active",
+    })
+    r = member.get("/api/api-keys/export.xlsx")
+    assert r.status_code == 200
+    assert ".xlsx" in r.headers["content-disposition"]
+
+    ws = load_workbook(io.BytesIO(r.content)).active
+    assert [c.value for c in ws[1]][:5] == ["Project", "API-Key", "Purpose", "Exp-date", "email_id"]
+    body = "\n".join(
+        " | ".join("" if c is None else str(c) for c in row)
+        for row in ws.iter_rows(min_row=2, values_only=True)
+    )
+    assert "E2E FD_Rate" in body
+    assert "No Expiry Date" in body
+    assert "fd_treasury@aikyame2e.com" in body
+
+
+def test_g6_the_provider_list_is_curated_by_admins_only(admin, member):
+    made = admin.post("/api/api-providers", json={"name": "E2E-Provider"})
+    assert made.status_code == 201
+    assert admin.post("/api/api-providers", json={"name": "e2e-PROVIDER"}).status_code == 400
+    assert member.post("/api/api-providers", json={"name": "Member tried"}).status_code == 403
+
+    admin.post("/api/api-keys", json={
+        "provider_id": made.json()["id"], "project_label": "E2E holds a provider", "status": "active",
+    })
+    refused = admin.delete(f"/api/api-providers/{made.json()['id']}")
+    assert refused.status_code == 400
+
+
+def test_g7_the_grid_is_still_what_decides(admin, requestor, grid):
+    """Access is a toggle like every other feature, not a hardcoded role."""
+    grid("api_keys", "requestor", True)
+    assert requestor.get("/api/api-keys").status_code == 200
+    grid("api_keys", "requestor", False)
+    assert requestor.get("/api/api-keys").status_code == 403

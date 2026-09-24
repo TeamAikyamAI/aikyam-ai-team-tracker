@@ -1,0 +1,20 @@
+<html><body style="font-family: Arial, sans-serif; color:#1f2937;">
+<h2>Delivered - {{ project.name }}</h2>
+<p>The AI &amp; Automation team has finished the work you asked for.</p>
+<p><strong>Vertical:</strong> {{ vertical_name }} ({{ vertical_head }})</p>
+<p><strong>Status:</strong> {{ status_name }}</p>
+{% if project.actual_completion_date %}
+<p><strong>Completed on:</strong> {{ project.actual_completion_date }}</p>
+{% endif %}
+{% if owners %}
+<p><strong>Built by:</strong> {{ owners }}</p>
+{% endif %}
+{% if project.description %}
+<p><strong>What it does:</strong><br>{{ project.description }}</p>
+{% endif %}
+<p>Please try it and come back to the team with anything that needs adjusting.
+{% if from_request %}This closes the request you raised on {{ request_date }}.{% endif %}</p>
+{% if signature %}<p style="margin:20px 0 0; line-height:1.5; white-space:pre-line; color:#374151;">{{ signature }}</p>{% endif %}
+
+<p style="color:#9ca3af; font-size:12px;">Sent automatically by {{ app_name }}.</p>
+</body></html>
