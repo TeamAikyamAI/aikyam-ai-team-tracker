@@ -84,8 +84,12 @@ def project_queue(db: Session = Depends(get_db), _: User = Depends(require_featu
 
 @router.get("/export.xlsx")
 def export_projects(db: Session = Depends(get_db), user: User = Depends(require_feature("projects_export"))):
-    """Every project as an Excel workbook, one sheet per active status - the
-    same layout as the team's original Weekly_Update.xlsx so it can replace it."""
+    """Every project as an Excel workbook in the team's weekly format: one sheet,
+    one row per project, one column per calendar week of updates.
+
+    The week columns are computed from the calendar at export time, so next week
+    the workbook has one more column on its own. How many weeks it shows is the
+    `export_weeks` setting; where a week starts is the digest day."""
     workbook = build_projects_workbook(db)
     buffer = BytesIO()
     workbook.save(buffer)

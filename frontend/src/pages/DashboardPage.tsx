@@ -1,6 +1,5 @@
 import * as React from "react";
 import {
-  CheckCircle2,
   FolderKanban,
   Hammer,
   Inbox,
@@ -8,7 +7,6 @@ import {
   ListFilter,
   Rocket,
   Table as TableIcon,
-  TimerReset,
   TriangleAlert,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -71,11 +69,6 @@ export default function DashboardPage() {
       .sort((a, b) => a.sort_order - b.sort_order);
   }, [statuses, projects]);
 
-  const terminalStatusIds = React.useMemo(
-    () => new Set((statuses ?? []).filter((s) => s.is_terminal).map((s) => s.id)),
-    [statuses]
-  );
-
   // "Live" and "WIP" are statuses like any other (statuses are admin-configurable),
   // so they are resolved by name rather than a fixed id.
   const liveStatusId = React.useMemo(
@@ -89,20 +82,12 @@ export default function DashboardPage() {
 
   const kpis = React.useMemo(() => {
     const total = projects?.length ?? 0;
-    const ongoing = projects?.filter((p) => !terminalStatusIds.has(p.status_id)).length ?? 0;
     const live = liveStatusId != null ? projects?.filter((p) => p.status_id === liveStatusId).length ?? 0 : 0;
     const wip = wipStatusId != null ? projects?.filter((p) => p.status_id === wipStatusId).length ?? 0 : 0;
-    const now = new Date();
-    const completedThisMonth =
-      projects?.filter((p) => {
-        if (!p.actual_completion_date) return false;
-        const d = new Date(p.actual_completion_date);
-        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-      }).length ?? 0;
     const openRequests =
       requests?.filter((r) => r.status === "submitted" || r.status === "under_review").length ?? 0;
-    return { total, ongoing, live, wip, completedThisMonth, openRequests };
-  }, [projects, terminalStatusIds, requests, liveStatusId, wipStatusId]);
+    return { total, live, wip, openRequests };
+  }, [projects, requests, liveStatusId, wipStatusId]);
 
   const trendData = React.useMemo(() => {
     const weeks: { label: string; value: number; start: Date }[] = [];
@@ -158,13 +143,11 @@ export default function DashboardPage() {
         </Link>
       )}
 
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <StatCard label="Total projects" value={kpis.total} icon={<FolderKanban className="h-5 w-5" />} loading={loading} accent="primary" index={0} />
-        <StatCard label="Ongoing" value={kpis.ongoing} icon={<TimerReset className="h-5 w-5" />} loading={loading} accent="default" index={1} />
-        <StatCard label="Live" value={kpis.live} icon={<Rocket className="h-5 w-5" />} loading={loading} accent="success" index={2} hint={liveStatusId == null ? 'No "Live" status configured' : undefined} />
-        <StatCard label="WIP" value={kpis.wip} icon={<Hammer className="h-5 w-5" />} loading={loading} accent="warning" index={3} hint={wipStatusId == null ? 'No "WIP" status configured' : undefined} />
-        <StatCard label="Completed this month" value={kpis.completedThisMonth} icon={<CheckCircle2 className="h-5 w-5" />} loading={loading} accent="success" index={4} />
-        <StatCard label="Requests awaiting review" value={kpis.openRequests} icon={<Inbox className="h-5 w-5" />} loading={loading} accent="warning" index={5} />
+        <StatCard label="Live" value={kpis.live} icon={<Rocket className="h-5 w-5" />} loading={loading} accent="success" index={1} hint={liveStatusId == null ? 'No "Live" status configured' : undefined} />
+        <StatCard label="WIP" value={kpis.wip} icon={<Hammer className="h-5 w-5" />} loading={loading} accent="warning" index={2} hint={wipStatusId == null ? 'No "WIP" status configured' : undefined} />
+        <StatCard label="Requests awaiting review" value={kpis.openRequests} icon={<Inbox className="h-5 w-5" />} loading={loading} accent="warning" index={3} />
       </div>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-5">

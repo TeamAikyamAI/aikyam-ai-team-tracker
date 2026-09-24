@@ -78,6 +78,14 @@ REGISTRY: tuple[SettingDef, ...] = (
     SettingDef("digest_timezone", "Weekly digest", "Timezone", "string", env.digest_timezone,
                "IANA name, e.g. Asia/Kolkata. Schedule changes take effect immediately - no restart."),
 
+    # --- Export -------------------------------------------------------------
+    SettingDef("export_weeks", "Export", "Week columns in the export", "int", 4,
+               "How many calendar weeks the Excel export shows, ending with the week "
+               "we are in now. Each week is one column of project updates. A week "
+               "starts on the day set under Weekly digest above, so the export and "
+               "the digest always mean the same thing by 'this week'.",
+               min=1, max=52),
+
     # --- AI -----------------------------------------------------------------
     SettingDef("ai_enabled", "AI", "Enable AI features", "bool", True,
                "Quick-Fill and Ask-the-Tracker. They fail soft when off or unconfigured."),

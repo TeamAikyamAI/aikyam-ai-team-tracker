@@ -208,6 +208,27 @@ def test_a_real_password_made_of_other_characters_still_saves(client, auth, db):
 
 
 # --------------------------------------------------------------------------
+# Export
+# --------------------------------------------------------------------------
+
+def test_export_weeks_is_an_admin_setting_with_its_own_group(client, auth, db):
+    """How many week columns the export shows is an admin's decision, so it is a
+    setting - and the Admin screen builds the new group from the API alone."""
+    from app.services import settings as cfg
+
+    items = {i["key"]: i for i in client.get("/settings", headers=auth("admin")).json()["items"]}
+    assert items["export_weeks"]["group"] == "Export"
+    assert items["export_weeks"]["type"] == "int"
+    assert cfg.get(db, "export_weeks") == 4
+
+    assert client.patch("/settings", headers=auth("admin"), json={"values": {"export_weeks": 0}}).status_code == 400
+    assert client.patch("/settings", headers=auth("admin"), json={"values": {"export_weeks": 53}}).status_code == 400
+    assert client.patch("/settings", headers=auth("admin"), json={"values": {"export_weeks": 8}}).status_code == 200
+    assert cfg.get(db, "export_weeks") == 8
+    cfg.set_many(db, {"export_weeks": 4})
+
+
+# --------------------------------------------------------------------------
 # Email signature
 # --------------------------------------------------------------------------
 
